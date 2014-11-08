@@ -17,6 +17,7 @@ package com.netflix.dyno.connectionpool;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Future;
 
 import com.netflix.dyno.connectionpool.exception.DynoException;
@@ -119,4 +120,11 @@ public interface ConnectionPool<CL> {
      * Setup the connection pool and start any maintenance threads
      */
     public Future<Boolean> start();
+    
+    /**
+     * 
+     * @param keys
+     * @return
+     */
+    public <T> Map<Long, Collection<T>> groupByToken(T ... keys); 
 }

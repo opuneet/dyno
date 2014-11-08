@@ -580,6 +580,11 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		return null;
 	}
 
+	@Override
+	public <T> Map<Long, Collection<T>> groupByToken(T ... keys) throws DynoException {
+		return selectionStrategy.groupByToken(keys);
+	}
+	
 	public TokenPoolTopology  getTopology() {
 		return selectionStrategy.getTokenPoolTopology();
 	}
@@ -1152,5 +1157,6 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			pool.shutdown();
 		}
 	}
+
 
 }

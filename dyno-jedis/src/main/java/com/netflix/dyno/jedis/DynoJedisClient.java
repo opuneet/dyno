@@ -1,6 +1,8 @@
 package com.netflix.dyno.jedis;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -53,7 +55,8 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 		 APPEND, BITCOUNT, BLPOP, BRPOP, DECR, DECRBY, DEL, DUMP, ECHO, EXISTS, EXPIRE, EXPIREAT, GET, GETBIT, GETRANGE, GETSET, 
 		 HDEL, HEXISTS,  HGET, HGETALL, HINCRBY, HINCRBYFLOAT, HKEYS, HLEN, HMGET, HMSET, HSET, HSETNX, HVALS, 
 		 INCR, INCRBY, INCRBYFLOAT, KEYS, LINDEX, LINSERT, LLEN, LPOP, LPUSH, LPUSHX, LRANGE, LREM, LSET, LTRIM, 
-		 MOVE, PERSIST, PEXPIRE, PEXPIREAT, PSETEX, PTTL, RESTORE, RPOP, RPOPLPUSH, RPUSH, RPUSHX, 
+		 MOVE, MGET, MSET, MSETNX,
+		 PERSIST, PEXPIRE, PEXPIREAT, PSETEX, PTTL, RESTORE, RPOP, RPOPLPUSH, RPUSH, RPUSHX, 
 		 SADD, SCARD, SDIFF, SDIFFSTORE, SET, SETBIT, SETEX, SETNX, SETRANGE, SINTER, SINTERSTORE, SISMEMBER, SMEMBERS, 
 		 SMOVE, SORT, SPOP, SRANDMEMBER, SREM, STRLEN, SUBSTR, SUNION, SUNIONSTORE, TTL, TYPE, 
 		 ZADD, ZCARD, ZCOUNT, ZINCRBY, ZRANGE, ZRANGEWITHSCORES, ZRANK, ZRANGEBYSCORE, ZRANGEBYSCOREWITHSCORES, ZREM, ZREMRANGEBYRANK, 
@@ -1969,17 +1972,121 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 	
 	@Override
 	public List<String> mget(String... keys) {
-		throw new NotImplementedException("not yet implemented");
+		
+		Map<Long, Collection<String>> keyGroups = connPool.groupByToken(keys);
+		
+		List<String> result = new ArrayList<String>();
+		
+		for (final Collection<String> group : keyGroups.values()) {
+			
+			if (group.isEmpty()) {
+				continue;
+			}
+			
+			OperationResult<List<String>> microResult = connPool.executeWithFailover(new BaseKeyOperation<List<String>>(group.iterator().next(), OpName.MGET) {
+				@Override
+				public List<String> execute(Jedis client, ConnectionContext state) throws DynoException {
+					String[] arr = group.toArray(new String[group.size()]);
+					return client.mget(arr);
+				}
+			});
+			result.addAll(microResult.getResult());
+		}
+		
+		return result;
 	}
 
 	@Override
 	public String mset(String... keysvalues) {
-		throw new NotImplementedException("not yet implemented");
+		
+		if (!(keysvalues.length % 2 == 0)) {
+			throw new RuntimeException("Must provide euqal no of keys and values");
+		}
+		
+		final Map<String, String> kvMap = new HashMap<String, String>();
+		int index = 0;
+		while (index < keysvalues.length) {
+			kvMap.put(keysvalues[index], keysvalues[index+1]);
+			index += 2;
+		}
+		
+		String[] allMapKeys = kvMap.keySet().toArray(new String[kvMap.size()]);
+		Map<Long, Collection<String>> keyGroups = connPool.groupByToken(allMapKeys);
+		
+		String result = "OK";
+		
+		for (final Collection<String> group : keyGroups.values()) {
+			
+			if (group.isEmpty()) {
+				continue;
+			}
+			
+			OperationResult<String> microResult = connPool.executeWithFailover(new BaseKeyOperation<String>(group.iterator().next(), OpName.MSET) {
+				@Override
+				public String execute(Jedis client, ConnectionContext state) throws DynoException {
+					
+					String[] arr = new String[group.size()*2];
+					int index = 0;
+					for (String s : group) {
+						arr[index++] = s;
+						arr[index++] = kvMap.get(s);
+					}
+					return client.mset(arr);
+				}
+			});
+			
+			String microResultS = microResult.getResult();
+			if (!microResultS.equals("OK")) {
+				result += "," + microResultS;
+			}
+		}
+		
+		return result;
 	}
 
 	@Override
-	public Long msetnx(String... keysvalues) {
-		throw new NotImplementedException("not yet implemented");
+	public Long msetnx(final String... keysvalues) {
+		
+		if (!(keysvalues.length % 2 == 0)) {
+			throw new RuntimeException("Must provide euqal no of keys and values");
+		}
+		
+		final Map<String, String> kvMap = new HashMap<String, String>();
+		int index = 0;
+		while (index < keysvalues.length) {
+			kvMap.put(keysvalues[index], keysvalues[index+1]);
+			index += 2;
+		}
+		
+		String[] allMapKeys = kvMap.keySet().toArray(new String[kvMap.size()]);
+		Map<Long, Collection<String>> keyGroups = connPool.groupByToken(allMapKeys);
+		
+		Long result = 0L;
+		
+		for (final Collection<String> group : keyGroups.values()) {
+			
+			if (group.isEmpty()) {
+				continue;
+			}
+			
+			OperationResult<Long> microResult = connPool.executeWithFailover(new BaseKeyOperation<Long>(group.iterator().next(), OpName.MSETNX) {
+				@Override
+				public Long execute(Jedis client, ConnectionContext state) throws DynoException {
+					
+					String[] arr = new String[group.size()*2];
+					int index = 0;
+					for (String s : group) {
+						arr[index++] = s;
+						arr[index++] = kvMap.get(s);
+					}
+					return client.msetnx(arr);
+				}
+			});
+			
+			result |= microResult.getResult();
+		}
+		
+		return result;
 	}
 
 	@Override

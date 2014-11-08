@@ -19,11 +19,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -31,6 +34,7 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import com.netflix.dyno.connectionpool.BaseOperation;
+import com.netflix.dyno.connectionpool.HashPartitioner;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
@@ -58,10 +62,14 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
 	private final ConcurrentHashMap<Long, HostConnectionPool<CL>> tokenPools = new ConcurrentHashMap<Long, HostConnectionPool<CL>>();
 	
 	public TokenAwareSelection() {
-		
-		this.tokenMapper = new BinarySearchTokenMapper(new Murmur1HashPartitioner());
+		this(new Murmur1HashPartitioner());
 	}
 
+	
+	public TokenAwareSelection(HashPartitioner hashPartitioner) {
+		this.tokenMapper = new BinarySearchTokenMapper(hashPartitioner);
+	}
+	
 	@Override
 	public void initWithHosts(Map<HostToken, HostConnectionPool<CL>> hPools) {
 		
@@ -97,8 +105,23 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
 	}
 
 	@Override
-	public Map<HostConnectionPool<CL>,BaseOperation<CL,?>> getPoolsForOperationBatch(Collection<BaseOperation<CL, ?>> ops) throws NoAvailableHostsException {
-		throw new RuntimeException("Not Implemented");
+	public <T> Map<Long, Collection<T>> groupByToken(T ... keys) throws NoAvailableHostsException {
+		
+		Map<Long, Collection<T>> tokenMap = new HashMap<Long, Collection<T>>();
+		
+		for (T key : keys) {
+			
+			Long keyHash = tokenMapper.hash((String)key);
+			HostToken hToken = tokenMapper.getToken(keyHash);
+
+			Collection<T> list = tokenMap.get(hToken.getToken());
+			if (list == null) {
+				list = new ArrayList<T>();
+				tokenMap.put(hToken.getToken(), list);
+			}
+			list.add(key);
+		}
+		return tokenMap;
 	}
 	
 	@Override
@@ -285,6 +308,66 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
 			when(mockHostPool.getHost()).thenReturn(hostToken.getHost());
 			
 			return mockHostPool;
+		}
+		
+		@Test
+		public void testGroupByToken() throws Exception {
+			
+			HostToken th1 = new HostToken(0L, new Host("h1", -1, Status.Up));
+			HostToken th2 = new HostToken(25L, new Host("h2", -1, Status.Up));
+			HostToken th3 = new HostToken(50L, new Host("h3", -1, Status.Up));
+			HostToken th4 = new HostToken(75L, new Host("h4", -1, Status.Up));
+
+			Map<HostToken, HostConnectionPool<Integer>> pools = new HashMap<HostToken, HostConnectionPool<Integer>>();
+			pools.put(th1, getMockHostConnectionPool(th1));
+			pools.put(th2, getMockHostConnectionPool(th2));
+			pools.put(th3, getMockHostConnectionPool(th3));
+			pools.put(th4, getMockHostConnectionPool(th4));
+
+			TokenAwareSelection<Integer> tokenAwareSelector = new TokenAwareSelection<Integer>(new HashPartitioner() {
+
+				@Override
+				public Long hash(int key) {
+					return (long) key;
+				}
+
+				@Override
+				public Long hash(long key) {
+					return key;
+				}
+
+				@Override
+				public Long hash(String key) {
+					return Long.valueOf(key);
+				}
+
+				@Override
+				public HostToken getToken(Long keyHash) {
+					throw new RuntimeException("NotImplemented");
+				}
+				
+			});
+			
+			tokenAwareSelector.initWithHosts(pools);
+			
+			Map<Long, Collection<String>> result = 
+					tokenAwareSelector.groupByToken("100", "45", "66", "33", "1","2","3","4","5", "60", "72", "101");
+			
+			Set<String> list0 = new HashSet<String>(result.get(0L));
+			Set<String> list0Expected = new HashSet<String>(Arrays.asList("100", "101"));
+			Assert.assertEquals(list0Expected, list0);
+			
+			Set<String> list25 = new HashSet<String>(result.get(25L));
+			Set<String> list25Expected = new HashSet<String>(Arrays.asList("1", "2", "3", "4", "5"));
+			Assert.assertEquals(list25Expected, list25);
+			
+			Set<String> list50 = new HashSet<String>(result.get(50L));
+			Set<String> list50Expected = new HashSet<String>(Arrays.asList("33", "45"));
+			Assert.assertEquals(list50Expected, list50);
+
+			Set<String> list75 = new HashSet<String>(result.get(75L));
+			Set<String> list75Expected = new HashSet<String>(Arrays.asList("60", "66", "72"));
+			Assert.assertEquals(list75Expected, list75);
 		}
 	}
 }

@@ -248,7 +248,6 @@ public class HostSelectionWithFallback<CL> {
 		}
 	}
 
-
 	private HostSelectionStrategy<CL> findSelector(Host host) {
 		String dc = host.getRack();
 		if (localRack == null) {
@@ -402,6 +401,10 @@ public class HostSelectionWithFallback<CL> {
 			}
 			topology.addToken(rack, hToken.getToken(), pool);
 		}
+	}
+	
+	public <T> Map<Long, Collection<T>> groupByToken(T ... keys) {
+		return localSelector.groupByToken(keys);
 	}
 	
 	public static class UnitTest {

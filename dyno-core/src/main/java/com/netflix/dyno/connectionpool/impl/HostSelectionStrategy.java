@@ -18,14 +18,12 @@ package com.netflix.dyno.connectionpool.impl;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import com.netflix.dyno.connectionpool.BaseOperation;
 import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
-import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
 import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 
 /**
@@ -44,13 +42,7 @@ public interface HostSelectionStrategy<CL> {
 	 */
 	public HostConnectionPool<CL> getPoolForOperation(BaseOperation<CL, ?> op) throws NoAvailableHostsException;
 
-	/**
-	 * 
-	 * @param ops
-	 * @return
-	 * @throws NoAvailableHostsException
-	 */
-	public Map<HostConnectionPool<CL>,BaseOperation<CL,?>> getPoolsForOperationBatch(Collection<BaseOperation<CL, ?>> ops) throws NoAvailableHostsException;
+	public <T> Map<Long, Collection<T>> groupByToken(T ... keys);
 	
 	/**
 	 * 

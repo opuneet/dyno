@@ -78,14 +78,9 @@ public class RoundRobinSelection<CL> implements HostSelectionStrategy<CL> {
 	}
 
 	@Override
-	public Map<HostConnectionPool<CL>, BaseOperation<CL, ?>> getPoolsForOperationBatch(Collection<BaseOperation<CL, ?>> ops) throws NoAvailableHostsException {
-		Map<HostConnectionPool<CL>, BaseOperation<CL, ?>> map = new HashMap<HostConnectionPool<CL>, BaseOperation<CL, ?>>();
-		for (BaseOperation<CL, ?> op : ops) {
-			map.put(getNextConnectionPool(), op);
-		}
-		return map;
+	public <T> Map<Long, Collection<T>> groupByToken(T ... keys) throws NoAvailableHostsException {
+		throw new RuntimeException("Not implemented");
 	}
-
 
 	@Override
 	public List<HostConnectionPool<CL>> getOrderedHostPools() {
